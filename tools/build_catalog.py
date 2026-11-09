@@ -18,6 +18,27 @@ LIBRARY = os.path.dirname(SITE)
 DATA = os.path.join(SITE, "data")
 
 SKIP_TOP = {"website", "LIVRES", "copilot", ".git", ".vercel"}
+
+# Confidential material: never listed, not even in the private local catalog.
+# Patterns (one regex per line, matched against the lowercased relative path) live in
+# tools/confidential.local.txt, which is git-ignored so the names never reach the repository.
+CONFIDENTIAL_FILE = os.path.join(HERE, "confidential.local.txt")
+
+
+def load_confidential():
+    try:
+        with open(CONFIDENTIAL_FILE, encoding="utf-8") as fh:
+            return [l.strip() for l in fh if l.strip() and not l.startswith("#")]
+    except OSError:
+        return []
+
+
+CONFIDENTIAL = load_confidential()
+
+
+def is_confidential(rel):
+    low = rel.lower()
+    return any(re.search(p, low) for p in CONFIDENTIAL)
 BOOK_EXT = {".pdf", ".epub", ".djvu", ".doc", ".docx", ".txt", ".zip"}
 
 NOISE = [r"\(\s*pdfdrive\s*\)", r"\bpdfdrive\b", r"\bz[ -]?lib(rary)?(\.org)?\b", r"\bz lib org\b",
@@ -58,6 +79,8 @@ def main():
                     continue
                 full = os.path.join(dp, f)
                 rel = os.path.relpath(full, LIBRARY).replace("\\", "/")
+                if is_confidential(rel):
+                    continue
                 parts = rel.split("/")
                 sub = parts[1:-1]
                 e = ia.get(rel)

@@ -44,3 +44,11 @@ data/catalog.json        public catalog (public-domain books only)
 tools/build_catalog.py   catalog generator
 serve_local.py           private local server
 ```
+
+## Languages
+
+The interface is available in **English, French and Haitian Creole** (`assets/i18n.js`, subject names in `assets/categories.js`). The language is chosen from the browser settings and can be changed from the menu in the header; the choice is remembered.
+
+## Confidential material
+
+`tools/build_catalog.py` skips confidential files entirely (patterns in the git-ignored `tools/confidential.local.txt`, one regex per line). They are never listed, not even in the private local catalog, so the local server cannot serve them either.

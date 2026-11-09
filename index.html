@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>KLibrary</title>
-  <meta name="description" content="A curated library of rare French esoteric, magical and mystical books in the public domain — read online.">
+  <meta name="description" content="Rare French esoteric, magical and mystical books in the public domain, readable online. In English, French and Haitian Creole.">
   <meta name="theme-color" content="#0f0d15">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -16,37 +16,43 @@
   </script>
 </head>
 <body>
-  <a class="skip" href="#main">Skip to content</a>
+  <a class="skip" href="#main" data-i18n="skip">Skip to content</a>
   <header class="topbar">
-    <a class="brand" href="#/" aria-label="KLibrary home">
+    <a class="brand" href="#/" aria-label="KLibrary">
       <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13"/><path d="M16 3 27 22H5Z"/><circle cx="16" cy="16" r="4"/></svg>
       <span>K<em>Library</em></span>
     </a>
     <form class="search" role="search" id="searchForm">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input id="q" type="search" placeholder="Search titles, authors, subjects…" autocomplete="off" aria-label="Search the library">
+      <input id="q" type="search" placeholder="Search titles, authors, subjects…" autocomplete="off"
+             data-i18n-placeholder="search.placeholder" data-i18n-aria="search.aria" aria-label="Search the library">
       <kbd>/</kbd>
     </form>
     <nav class="nav">
-      <a href="#/browse">Browse</a>
-      <a href="#/about">About</a>
-      <button class="icon-btn" id="themeBtn" type="button" aria-label="Toggle light or dark theme">
+      <a href="#/browse" data-i18n="nav.browse">Browse</a>
+      <a href="#/about" data-i18n="nav.about">About</a>
+      <label class="lang">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+        <select id="langSel" data-i18n-aria="lang.label" aria-label="Language"></select>
+      </label>
+      <button class="icon-btn" id="themeBtn" type="button" data-i18n-aria="theme" aria-label="Toggle light or dark theme">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10Z"/></svg>
       </button>
     </nav>
   </header>
 
   <main id="main" tabindex="-1">
-    <div class="loading" id="loading">Opening the archive…</div>
+    <div class="loading" data-i18n="loading">Opening the archive…</div>
   </main>
 
   <footer class="footer">
-    <p>Public-domain scans courtesy of the <a href="https://archive.org" rel="noopener">Internet Archive</a>, the BnF, the Bibliothèque Sainte-Geneviève, BIU Santé and the Wellcome Collection.</p>
+    <p id="footSources">Public-domain scans courtesy of the <a href="https://archive.org" rel="noopener">Internet Archive</a>, the BnF, the Bibliothèque Sainte-Geneviève, BIU Santé and the Wellcome Collection.</p>
     <p class="muted" id="modeNote"></p>
-    <p class="credit">KLibrary, created by <strong>Kescollah</strong></p>
+    <p class="credit" id="credit">KLibrary, created by <strong>Kescollah</strong></p>
   </footer>
 
   <script src="assets/config.js"></script>
+  <script src="assets/i18n.js"></script>
   <script src="assets/categories.js"></script>
   <script src="assets/app.js"></script>
 </body>

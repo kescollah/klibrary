@@ -3,19 +3,60 @@
 
   const CFG = window.KLIBRARY_CONFIG || {};
   const CATS = window.KLIBRARY_CATEGORIES || {};
+  const I18N = window.KLIBRARY_I18N || {};
+  const LANGS = window.KLIBRARY_LANGS || [{ code: "en", label: "English" }];
   const PAGE = 48;
   const main = document.getElementById("main");
   const qInput = document.getElementById("q");
+  const langSel = document.getElementById("langSel");
 
   let BOOKS = [];
   let BY_ID = new Map();
   let shown = PAGE;
+  let LANG = pickLang();
+
+  // ---------- i18n ----------
+  function pickLang() {
+    const ok = (c) => c && I18N[c];
+    try { const s = localStorage.getItem("klibrary-lang"); if (ok(s)) return s; } catch (e) {}
+    for (const l of navigator.languages || [navigator.language || "en"]) {
+      const c = String(l).toLowerCase().slice(0, 2);
+      if (ok(c)) return c;
+    }
+    return "en";
+  }
+  function t(key, vars) {
+    let s = (I18N[LANG] && I18N[LANG][key]) ?? (I18N.en && I18N.en[key]) ?? key;
+    if (vars) s = s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
+    return s;
+  }
+  const countLabel = (n) => t(n === 1 ? "count.one" : "count.other", { n });
+  const locale = () => (LANG === "en" ? "en" : "fr");
+
+  function applyStatic() {
+    document.documentElement.lang = LANG;
+    document.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = t(el.dataset.i18n); });
+    document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => { el.placeholder = t(el.dataset.i18nPlaceholder); });
+    document.querySelectorAll("[data-i18n-aria]").forEach((el) => { el.setAttribute("aria-label", t(el.dataset.i18nAria)); });
+    document.getElementById("footSources").innerHTML = esc(t("footer.sources")).replace("{ia}", '<a href="https://archive.org" rel="noopener">Internet Archive</a>');
+    document.getElementById("credit").innerHTML = esc(t("footer.credit")).replace("{name}", "<strong>Kescollah</strong>");
+    updateModeNote();
+  }
+  function updateModeNote() {
+    if (!BOOKS.length) return;
+    const own = BOOKS.filter((b) => b.source === "own").length;
+    document.getElementById("modeNote").textContent = own
+      ? t("mode.private", { n: BOOKS.length, own })
+      : t("mode.public", { n: BOOKS.length });
+  }
 
   // ---------- helpers ----------
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const norm = (s) => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-  const catInfo = (c) => CATS[c] || { en: c, hue: 260, blurb: "" };
-  const catLabel = (c) => catInfo(c).en;
+  const catInfo = (c) => CATS[c] || { hue: 260 };
+  const catText = (c) => { const i = catInfo(c); return i[LANG] || i.en || [c, ""]; };
+  const catLabel = (c) => catText(c)[0];
+  const catBlurb = (c) => catText(c)[1] || "";
   const fmtSize = (b) => (b > 1048576 ? (b / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(b / 1024)) + " KB");
   const hasOwn = () => BOOKS.some((b) => b.source === "own");
 
@@ -27,9 +68,9 @@
   function rng(seed) {
     return function () {
       seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
-      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      let x = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x;
+      return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
     };
   }
 
@@ -57,13 +98,6 @@
     return `<svg class="sigil" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46"/><path d="${d}Z"/>${extra}</svg>`;
   }
 
-  function cover(b, large) {
-    return `<div class="cover${large ? " lg" : ""}" style="--h:${b._h}">${sigil(b.id)}
-      <span class="c-cat">${esc(catLabel(b.category))}</span>
-      <span class="c-title">${esc(b.title)}</span>
-      <span class="c-year">${b.year ? esc(b.year) : ""}</span></div>`;
-  }
-
   // Decorative astrolabe for the home hero.
   function astrolabe() {
     const ticks = [];
@@ -72,10 +106,7 @@
       ticks.push(`<path d="M${(50 + 46 * Math.cos(a)).toFixed(2)} ${(50 + 46 * Math.sin(a)).toFixed(2)}L${(50 + r1 * Math.cos(a)).toFixed(2)} ${(50 + r1 * Math.sin(a)).toFixed(2)}" stroke-width="0.6"/>`);
     }
     const planets = ["SOL", "LVNA", "MARS", "MERCVRIVS", "IVPITER", "VENVS", "SATVRNVS"];
-    const labels = planets.map((p, i) => {
-      const a = (i * 360) / planets.length;
-      return `<text x="50" y="12.2" text-anchor="middle" transform="rotate(${a.toFixed(1)} 50 50)">${p}</text>`;
-    }).join("");
+    const labels = planets.map((p, i) => `<text x="50" y="12.2" text-anchor="middle" transform="rotate(${((i * 360) / planets.length).toFixed(1)} 50 50)">${p}</text>`).join("");
     let star = "";
     for (let i = 0; i <= 7; i++) {
       const k = (i * 3) % 7, a = -Math.PI / 2 + (k * 2 * Math.PI) / 7;
@@ -89,6 +120,12 @@
       <path d="M50 4V96M4 50H96" stroke-width="0.25"/></g></svg>`;
   }
 
+  function cover(b, large) {
+    return `<div class="cover${large ? " lg" : ""}" style="--h:${b._h}">${sigil(b.id)}
+      <span class="c-cat">${esc(catLabel(b.category))}</span>
+      <span class="c-title">${esc(b.title)}</span>
+      <span class="c-year">${b.year ? esc(b.year) : ""}</span></div>`;
+  }
   function card(b) {
     return `<a class="book" href="#/book/${b.id}">${cover(b)}
       <span class="meta"><span class="t">${esc(b.title)}</span>
@@ -104,8 +141,7 @@
   function go(path, params, replace) {
     const qs = params && [...params.keys()].length ? "?" + params.toString() : "";
     const url = "#" + path + qs;
-    if (replace) history.replaceState(null, "", url); else location.hash = url;
-    if (replace) render();
+    if (replace) { history.replaceState(null, "", url); render(); } else location.hash = url;
   }
 
   // ---------- search & filter ----------
@@ -115,10 +151,10 @@
     const out = [];
     for (const b of list) {
       let score = 0, ok = true;
-      for (const t of toks) {
-        if (!b._hay.includes(t)) { ok = false; break; }
-        score += b._t.includes(t) ? 3 : b._a.includes(t) ? 2 : 1;
-        if (b._t.startsWith(t)) score += 2;
+      for (const tk of toks) {
+        if (!b._hay.includes(tk)) { ok = false; break; }
+        score += b._t.includes(tk) ? 3 : b._a.includes(tk) ? 2 : 1;
+        if (b._t.startsWith(tk)) score += 2;
       }
       if (ok) out.push([b, score]);
     }
@@ -153,41 +189,38 @@
     const oldest = years.length ? Math.min(...years) : "";
     const magic = new Set(["Magie et Grimoires", "Démonologie et Sorcellerie", "Occultisme", "Alchimie"]);
     const rare = pd.filter((b) => magic.has(b.category) && b.year).sort((a, b) => a.year - b.year).slice(0, 18);
-    const oldestBooks = pd.filter((b) => b.year && !magic.has(b.category)).sort((a, b) => a.year - b.year).slice(0, 14);
+    const early = pd.filter((b) => b.year && !magic.has(b.category)).sort((a, b) => a.year - b.year).slice(0, 14);
     const cats = counts(BOOKS.map((b) => [b]), "category");
     main.innerHTML = `
       <div class="hero-wrap"><section class="hero">
-        <span class="eyebrow">Bibliothèque des sciences occultes</span>
-        <h1>Rare books of <em>magic</em>, mysticism &amp; the hidden sciences</h1>
-        <p class="lead">A curated French-language library: grimoires, Kabbalah, alchemy, Martinism, demonology and the great occultists of the nineteenth century. Every public-domain title can be read right here in your browser.</p>
+        <span class="eyebrow">${esc(t("home.eyebrow"))}</span>
+        <h1>${t("home.title")}</h1>
+        <p class="lead">${esc(t("home.lead"))}</p>
         <div class="stats">
-          <div class="stat"><b>${BOOKS.length}</b><span>books</span></div>
-          <div class="stat"><b>${cats.length}</b><span>subjects</span></div>
-          <div class="stat"><b>${authors.size}</b><span>authors &amp; collections</span></div>
-          ${oldest ? `<div class="stat"><b>${oldest}</b><span>oldest edition</span></div>` : ""}
+          <div class="stat"><b>${BOOKS.length}</b><span>${esc(t("stat.books"))}</span></div>
+          <div class="stat"><b>${cats.length}</b><span>${esc(t("stat.subjects"))}</span></div>
+          <div class="stat"><b>${authors.size}</b><span>${esc(t("stat.authors"))}</span></div>
+          ${oldest ? `<div class="stat"><b>${oldest}</b><span>${esc(t("stat.oldest"))}</span></div>` : ""}
         </div>
         <div class="hero-actions">
-          <a class="btn primary" href="#/browse">Browse the library</a>
+          <a class="btn primary" href="#/browse">${esc(t("btn.browse"))}</a>
           <button class="btn" type="button" data-random>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>Open a random book</button>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>${esc(t("btn.random"))}</button>
         </div>
       </section>${astrolabe()}</div>
       ${rare.length ? `<section class="section">
-        <div class="section-head"><div><h2>Rare grimoires &amp; magical texts</h2><p>The oldest editions in the collection, from the sixteenth century onward.</p></div>
-        <a href="#/browse?cat=${encodeURIComponent("Magie et Grimoires")}&sort=oldest">See all magic →</a></div>
+        <div class="section-head"><div><h2>${esc(t("rare.title"))}</h2><p>${esc(t("rare.sub"))}</p></div>
+        <a href="#/browse?cat=${encodeURIComponent("Magie et Grimoires")}&sort=oldest">${esc(t("rare.all"))}</a></div>
         <div class="shelf">${rare.map(card).join("")}</div></section>` : ""}
       <section class="section">
-        <div class="section-head"><div><h2>Subjects</h2><p>${cats.length} shelves, from Kabbalah to Vodou.</p></div></div>
-        <div class="cat-grid">${cats.map(([c, n]) => {
-          const i = catInfo(c);
-          return `<a class="cat-card" style="--h:${i.hue}" href="#/browse?cat=${encodeURIComponent(c)}">
-            <span class="count">${n}</span><h3>${esc(i.en)}</h3><span class="fr">${esc(c)}</span><p>${esc(i.blurb)}</p></a>`;
-        }).join("")}</div>
+        <div class="section-head"><div><h2>${esc(t("subjects.title"))}</h2><p>${esc(t("subjects.sub", { n: cats.length }))}</p></div></div>
+        <div class="cat-grid">${cats.map(([c, n]) => `<a class="cat-card" style="--h:${catInfo(c).hue}" href="#/browse?cat=${encodeURIComponent(c)}">
+            <span class="count">${n}</span><h3>${esc(catLabel(c))}</h3>${LANG !== "fr" ? `<span class="fr">${esc(c)}</span>` : ""}<p>${esc(catBlurb(c))}</p></a>`).join("")}</div>
       </section>
-      ${oldestBooks.length ? `<section class="section">
-        <div class="section-head"><div><h2>Mystics &amp; early editions</h2><p>Kabbalah, mysticism and hermetic philosophy in their first printings.</p></div>
-        <a href="#/browse?sort=oldest">Sort by date →</a></div>
-        <div class="shelf">${oldestBooks.map(card).join("")}</div></section>` : ""}`;
+      ${early.length ? `<section class="section">
+        <div class="section-head"><div><h2>${esc(t("early.title"))}</h2><p>${esc(t("early.sub"))}</p></div>
+        <a href="#/browse?sort=oldest">${esc(t("early.all"))}</a></div>
+        <div class="shelf">${early.map(card).join("")}</div></section>` : ""}`;
   }
 
   function facetButtons(entries, param, p, labeler) {
@@ -204,34 +237,34 @@
     const authCounts = counts(filtered(p, "author"), "author").slice(0, 40);
     const src = p.get("src") || "";
     const cat = p.get("cat");
-    const title = cat ? catLabel(cat) : p.get("q") ? `Results for “${esc(p.get("q"))}”` : "The whole library";
+    const title = cat ? esc(catLabel(cat)) : p.get("q") ? esc(t("browse.results", { q: p.get("q") })) : esc(t("browse.all"));
     const chips = [];
     if (p.get("q")) chips.push(["q", `“${p.get("q")}”`]);
     if (cat) chips.push(["cat", catLabel(cat)]);
     if (p.get("author")) chips.push(["author", p.get("author")]);
-    if (src) chips.push(["src", src === "pd" ? "Public domain" : "Personal files"]);
+    if (src) chips.push(["src", src === "pd" ? t("src.pd") : t("src.ownChip")]);
+    const sorts = ["relevance", "title", "author", "oldest", "newest"];
 
     main.innerHTML = `<div class="browse">
-      <aside class="filters" id="filters" aria-label="Filters">
-        ${hasOwn() ? `<div><h4>Source</h4><div class="seg">
-          <button type="button" data-set="src" data-val="" aria-pressed="${!src}">All</button>
-          <button type="button" data-set="src" data-val="pd" aria-pressed="${src === "pd"}">Public domain</button>
-          <button type="button" data-set="src" data-val="own" aria-pressed="${src === "own"}">Personal</button></div></div>` : ""}
-        <div><h4>Sort by</h4><select class="sort" id="sortSel" aria-label="Sort results">
-          ${[["relevance", "Relevance"], ["title", "Title"], ["author", "Author"], ["oldest", "Oldest first"], ["newest", "Newest first"]]
-            .map(([v, l]) => `<option value="${v}"${v === sort ? " selected" : ""}>${l}</option>`).join("")}</select></div>
-        <div><h4>Subjects</h4><div class="facet">
-          <button type="button" data-set="cat" data-val="" aria-pressed="${!cat}"><span>All subjects</span><span>${filtered(p, "cat").length}</span></button>
+      <aside class="filters" id="filters" aria-label="${esc(t("f.filters"))}">
+        ${hasOwn() ? `<div><h4>${esc(t("f.source"))}</h4><div class="seg">
+          <button type="button" data-set="src" data-val="" aria-pressed="${!src}">${esc(t("src.all"))}</button>
+          <button type="button" data-set="src" data-val="pd" aria-pressed="${src === "pd"}">${esc(t("src.pd"))}</button>
+          <button type="button" data-set="src" data-val="own" aria-pressed="${src === "own"}">${esc(t("src.own"))}</button></div></div>` : ""}
+        <div><h4>${esc(t("f.sort"))}</h4><select class="sort" id="sortSel" aria-label="${esc(t("f.sort"))}">
+          ${sorts.map((v) => `<option value="${v}"${v === sort ? " selected" : ""}>${esc(t("sort." + v))}</option>`).join("")}</select></div>
+        <div><h4>${esc(t("f.subjects"))}</h4><div class="facet">
+          <button type="button" data-set="cat" data-val="" aria-pressed="${!cat}"><span>${esc(t("f.allSubjects"))}</span><span>${filtered(p, "cat").length}</span></button>
           ${facetButtons(catCounts, "cat", p, catLabel)}</div></div>
-        ${authCounts.length ? `<div><h4>Authors &amp; collections</h4><div class="facet">${facetButtons(authCounts, "author", p)}</div></div>` : ""}
+        ${authCounts.length ? `<div><h4>${esc(t("f.authors"))}</h4><div class="facet">${facetButtons(authCounts, "author", p)}</div></div>` : ""}
       </aside>
       <section>
         <div class="results-head"><h1>${title}</h1>
-          <span class="count">${res.length} book${res.length === 1 ? "" : "s"}</span>
-          <button class="btn filter-toggle" type="button" id="filterToggle" aria-controls="filters">Filters</button></div>
+          <span class="count">${esc(countLabel(res.length))}</span>
+          <button class="btn filter-toggle" type="button" id="filterToggle" aria-controls="filters">${esc(t("f.filters"))}</button></div>
         ${chips.length ? `<div class="chips">${chips.map(([k, l]) => `<button class="chip" type="button" data-set="${k}" data-val="">${esc(l)} ✕</button>`).join("")}</div>` : ""}
-        ${res.length ? `<div class="book-grid">${res.slice(0, shown).map(([b]) => card(b)).join("")}</div>` : `<div class="empty">Nothing found in the archive. Try fewer words.</div>`}
-        ${res.length > shown ? `<div class="more"><button class="btn" type="button" id="moreBtn">Show more (${res.length - shown} left)</button></div>` : ""}
+        ${res.length ? `<div class="book-grid">${res.slice(0, shown).map(([b]) => card(b)).join("")}</div>` : `<div class="empty">${esc(t("empty"))}</div>`}
+        ${res.length > shown ? `<div class="more"><button class="btn" type="button" id="moreBtn">${esc(t("more", { n: res.length - shown }))}</button></div>` : ""}
       </section></div>`;
 
     const sel = document.getElementById("sortSel");
@@ -248,68 +281,60 @@
 
   function viewBook(id) {
     const b = BY_ID.get(id);
-    if (!b) { main.innerHTML = `<div class="empty">This book is not in the catalog.</div>`; return; }
+    if (!b) { main.innerHTML = `<div class="empty">${esc(t("book.notFound"))}</div>`; return; }
     document.title = `${b.title} · KLibrary`;
-    const i = catInfo(b.category);
-    const pool = BOOKS.filter((x) => x.id !== b.id && ((b.author && x.author === b.author) || x.category === b.category));
-    pool.sort((x, y) => (b.author && y.author === b.author) - (b.author && x.author === b.author) || (x.year || 9999) - (y.year || 9999));
+    const label = catLabel(b.category);
+    const sameAuthor = (x) => b.author && x.author === b.author;
+    const pool = BOOKS.filter((x) => x.id !== b.id && (sameAuthor(x) || x.category === b.category));
+    pool.sort((x, y) => sameAuthor(y) - sameAuthor(x) || (x.year || 9999) - (y.year || 9999));
     const related = pool.slice(0, 14);
-    const facts = [["Subject", `<a href="#/browse?cat=${encodeURIComponent(b.category)}">${esc(i.en)}</a><br><span class="muted">${esc(b.category)}</span>`]];
-    if (b.year) facts.push(["Edition", esc(b.year)]);
-    facts.push(["Format", `${esc(b.ext.toUpperCase())} · ${fmtSize(b.size)}`]);
-    if (b.collection) facts.push(["Collection", esc(b.collection)]);
-    facts.push(["Source", b.source === "pd" ? `Internet Archive<br><span class="muted">${esc(b.ia)}</span>` : "Personal library"]);
+    const facts = [[t("fact.subject"), `<a href="#/browse?cat=${encodeURIComponent(b.category)}">${esc(label)}</a>${LANG !== "fr" ? `<br><span class="muted">${esc(b.category)}</span>` : ""}`]];
+    if (b.year) facts.push([t("fact.edition"), esc(b.year)]);
+    facts.push([t("fact.format"), `${esc(b.ext.toUpperCase())} · ${fmtSize(b.size)}`]);
+    if (b.collection) facts.push([t("fact.collection"), esc(b.collection)]);
+    facts.push([t("fact.source"), b.source === "pd" ? `Internet Archive<br><span class="muted">${esc(b.ia)}</span>` : esc(t("source.personal"))]);
 
     const actions = b.source === "pd"
-      ? `<button class="btn primary" type="button" id="readBtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 5h7a3 3 0 0 1 3 3v12a2 2 0 0 0-2-2H2zM22 5h-7a3 3 0 0 0-3 3v12a2 2 0 0 1 2-2h8z"/></svg>Read online</button>
-         <a class="btn" href="https://archive.org/download/${encodeURIComponent(b.ia)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 21h16"/></svg>Download</a>
-         <a class="btn" href="https://archive.org/details/${encodeURIComponent(b.ia)}" target="_blank" rel="noopener">View on Internet Archive</a>`
-      : `<a class="btn primary" href="${fileUrl(b.path)}" target="_blank" rel="noopener">Open file</a>`;
+      ? `<button class="btn primary" type="button" id="readBtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 5h7a3 3 0 0 1 3 3v12a2 2 0 0 0-2-2H2zM22 5h-7a3 3 0 0 0-3 3v12a2 2 0 0 1 2-2h8z"/></svg><span>${esc(t("read"))}</span></button>
+         <a class="btn" href="https://archive.org/download/${encodeURIComponent(b.ia)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 21h16"/></svg>${esc(t("download"))}</a>
+         <a class="btn" href="https://archive.org/details/${encodeURIComponent(b.ia)}" target="_blank" rel="noopener">${esc(t("viewIA"))}</a>`
+      : `<a class="btn primary" href="${fileUrl(b.path)}" target="_blank" rel="noopener">${esc(t("open"))}</a>`;
+    const relTitle = related.length && sameAuthor(related[0]) ? t("related.author", { a: b.author }) : t("related.cat", { c: label });
 
     main.innerHTML = `<article class="book-page">
-      <nav class="crumbs" aria-label="Breadcrumb"><a href="#/browse">Library</a> / <a href="#/browse?cat=${encodeURIComponent(b.category)}">${esc(i.en)}</a></nav>
+      <nav class="crumbs" aria-label="Breadcrumb"><a href="#/browse">${esc(t("crumb.library"))}</a> / <a href="#/browse?cat=${encodeURIComponent(b.category)}">${esc(label)}</a></nav>
       <div>${cover(b, true)}</div>
       <div class="book-info">
-        <span class="badge ${b.source === "pd" ? "pd" : ""}">${b.source === "pd" ? "Public domain" : "Personal file"}</span>
+        <span class="badge ${b.source === "pd" ? "pd" : ""}">${esc(t(b.source === "pd" ? "badge.pd" : "badge.own"))}</span>
         <h1>${esc(b.title)}</h1>
-        ${b.author ? `<div class="by">by <a href="#/browse?author=${encodeURIComponent(b.author)}">${esc(b.author)}</a></div>` : ""}
-        <dl class="facts">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl>
+        ${b.author ? `<div class="by">${esc(t("by", { a: "\u0000" })).replace("\u0000", `<a href="#/browse?author=${encodeURIComponent(b.author)}">${esc(b.author)}</a>`)}</div>` : ""}
+        <dl class="facts">${facts.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`).join("")}</dl>
         <div class="actions">${actions}</div>
-        ${b.source === "pd" ? `<p class="note">Scanned from the original edition and hosted by the Internet Archive. The reader loads their viewer, which supports full-text search inside the book.</p>` : ""}
+        ${b.source === "pd" ? `<p class="note">${esc(t("note.pd"))}</p>` : ""}
       </div>
       <div class="reader" id="reader" hidden></div>
-      ${related.length ? `<section class="related section"><div class="section-head"><div><h2>${b.author && pool[0] && pool[0].author === b.author ? "More by " + esc(b.author) : "More in " + esc(i.en)}</h2></div></div>
+      ${related.length ? `<section class="related section"><div class="section-head"><div><h2>${esc(relTitle)}</h2></div></div>
         <div class="shelf">${related.map(card).join("")}</div></section>` : ""}
     </article>`;
 
     const rb = document.getElementById("readBtn");
     rb && rb.addEventListener("click", () => {
       const r = document.getElementById("reader");
+      const lbl = rb.querySelector("span");
       if (r.hidden) {
         r.innerHTML = `<iframe src="https://archive.org/embed/${encodeURIComponent(b.ia)}" title="${esc(b.title)}" allowfullscreen loading="lazy"></iframe>`;
         r.hidden = false;
-        rb.lastChild.textContent = "Close reader";
+        lbl.textContent = t("close");
         r.scrollIntoView({ behavior: "smooth", block: "start" });
       } else {
-        r.hidden = true; r.innerHTML = ""; rb.lastChild.textContent = "Read online";
+        r.hidden = true; r.innerHTML = ""; lbl.textContent = t("read");
       }
     });
   }
 
   function viewAbout() {
     const pd = BOOKS.filter((b) => b.source === "pd").length;
-    main.innerHTML = `<div class="prose">
-      <h1>About the library</h1>
-      <p>KLibrary gathers French-language books on magic, occultism, alchemy, Kabbalah, Martinism, mysticism and the history of witchcraft. It focuses on rare and hard-to-find titles: early grimoires, Renaissance demonologists, and the occult revival of nineteenth-century Paris.</p>
-      <h2>Public domain</h2>
-      <p>The ${pd} public-domain books here were written by authors who died more than seventy years ago. They were scanned by the Bibliothèque nationale de France, the Bibliothèque Sainte-Geneviève, BIU Santé, the Wellcome Collection and Google Books, and they are hosted by the <a href="https://archive.org" rel="noopener">Internet Archive</a>. Reading and downloading go directly through their servers.</p>
-      <h2>How to use it</h2>
-      <ul>
-        <li>Press <code>/</code> anywhere to search. Search ignores accents, so <code>eliphas levi</code> finds Éliphas Lévi.</li>
-        <li>Combine subject, author and sort filters. Every view has its own URL, so you can share it.</li>
-        <li>Open any book and choose <em>Read online</em> to browse the original scan without leaving the page.</li>
-      </ul>
-    </div>`;
+    main.innerHTML = `<div class="prose">${t("about").replace("{n}", pd)}</div>`;
   }
 
   // ---------- render loop ----------
@@ -328,8 +353,11 @@
   window.addEventListener("hashchange", () => { render(); scrollTo(0, 0); });
 
   main.addEventListener("click", (e) => {
-    const rnd = e.target.closest("[data-random]");
-    if (rnd) { const b = BOOKS[Math.floor(Math.random() * BOOKS.length)]; location.hash = "#/book/" + b.id; return; }
+    if (e.target.closest("[data-random]")) {
+      const b = BOOKS[Math.floor(Math.random() * BOOKS.length)];
+      location.hash = "#/book/" + b.id;
+      return;
+    }
     const btn = e.target.closest("[data-set]");
     if (!btn) return;
     const { params } = parseHash();
@@ -349,7 +377,7 @@
       const v = qInput.value.trim();
       if (v) p.set("q", v); else p.delete("q");
       p.delete("sort");
-      if (path === "/browse") go("/browse", p, true); else go("/browse", p);
+      go("/browse", p, path === "/browse");
     }, 180);
   });
   document.getElementById("searchForm").addEventListener("submit", (e) => e.preventDefault());
@@ -366,20 +394,28 @@
     try { localStorage.setItem("klibrary-theme", next); } catch (e) {}
   });
 
+  langSel.innerHTML = LANGS.map((l) => `<option value="${l.code}">${esc(l.label)}</option>`).join("");
+  langSel.value = LANG;
+  langSel.addEventListener("change", () => {
+    LANG = langSel.value;
+    try { localStorage.setItem("klibrary-lang", LANG); } catch (e) {}
+    applyStatic();
+    if (BOOKS.length) render();
+  });
+  applyStatic();
+
   // ---------- boot ----------
   fetch(CFG.catalogUrl || "data/catalog.json", { cache: "no-cache" })
     .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then((data) => {
       BOOKS = data.books.map((b) => {
-        const t = norm(b.title), a = norm(b.author);
-        return Object.assign(b, { _t: t, _a: a, _h: catInfo(b.category).hue, _hay: [t, a, norm(b.category), norm(catLabel(b.category)), norm(b.collection), b.year || ""].join(" ") });
+        const ti = norm(b.title), au = norm(b.author), ci = catInfo(b.category);
+        const labels = ["en", "fr", "ht"].map((l) => (ci[l] ? norm(ci[l][0]) : "")).join(" ");
+        return Object.assign(b, { _t: ti, _a: au, _h: ci.hue, _hay: [ti, au, norm(b.category), labels, norm(b.collection), b.year || ""].join(" ") });
       });
       BY_ID = new Map(BOOKS.map((b) => [b.id, b]));
-      const own = BOOKS.filter((b) => b.source === "own").length;
-      document.getElementById("modeNote").textContent = own
-        ? `Private local mode: ${BOOKS.length} books, including ${own} personal files.`
-        : `${BOOKS.length} public-domain books.`;
+      updateModeNote();
       render();
     })
-    .catch(() => { main.innerHTML = `<div class="empty">The catalog could not be loaded.</div>`; });
+    .catch(() => { main.innerHTML = `<div class="empty">${esc(t("error.catalog"))}</div>`; });
 })();

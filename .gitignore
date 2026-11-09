@@ -5,3 +5,6 @@ __pycache__/
 .vercel/
 .DS_Store
 Thumbs.db
+
+# Local list of confidential collections (names must never be committed).
+tools/confidential.local.txt

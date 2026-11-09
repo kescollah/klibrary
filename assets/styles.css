@@ -82,6 +82,14 @@ button { font: inherit; color: inherit; }
 .nav { display: flex; align-items: center; gap: 18px; }
 .nav a { color: var(--ink-2); font-weight: 500; }
 .nav a:hover, .nav a.active { color: var(--gold); }
+.lang { position: relative; display: flex; align-items: center; }
+.lang svg { position: absolute; left: 10px; width: 16px; height: 16px; fill: none; stroke: var(--ink-2); stroke-width: 1.8; pointer-events: none; }
+.lang select {
+  appearance: none; -webkit-appearance: none; cursor: pointer;
+  height: 36px; padding: 0 12px 0 32px; border-radius: 10px; border: 1px solid var(--line-2);
+  background: var(--surface); color: var(--ink); font: 500 13px var(--sans);
+}
+.lang select:hover { border-color: var(--gold); }
 .icon-btn { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--surface); cursor: pointer; }
 .icon-btn svg { width: 18px; height: 18px; fill: none; stroke: var(--ink-2); stroke-width: 2; }
 
@@ -237,6 +245,9 @@ select.sort { width: 100%; padding: 8px 10px; border-radius: 10px; border: 1px s
 }
 @media (max-width: 520px) {
   .nav a[href="#/about"] { display: none; }
+  .nav { gap: 10px; }
+  .lang select { width: 62px; padding-right: 4px; color: transparent; }
+  .lang select option { color: var(--ink); }
   .book-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 14px; }
   .search kbd { display: none; }
   .hero h1 { font-size: 40px; }
