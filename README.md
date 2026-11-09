@@ -1,5 +1,7 @@
 # KLibrary
 
+Created by **Kescollah**.
+
 A static website for browsing a library of French esoteric, magical and mystical books. It has no build step and no dependencies: plain HTML, CSS and JavaScript plus a JSON catalog.
 
 - **Public site:** lists only the public-domain books. Reading and downloading go straight to the Internet Archive, so the site hosts no PDFs.

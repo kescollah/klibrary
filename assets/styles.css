@@ -218,6 +218,8 @@ select.sort { width: 100%; padding: 8px 10px; border-radius: 10px; border: 1px s
 
 .footer { border-top: 1px solid var(--line); padding: 28px clamp(16px, 4vw, 40px); text-align: center; font-size: 13px; color: var(--ink-2); }
 .footer p { margin: 4px 0; }
+.footer .credit { margin-top: 12px; font: italic 16px var(--serif); color: var(--ink-2); }
+.footer .credit strong { color: var(--gold); font-weight: 600; font-style: normal; letter-spacing: .02em; }
 
 /* ---------- responsive ---------- */
 @media (max-width: 900px) {
