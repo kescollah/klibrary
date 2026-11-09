@@ -66,6 +66,8 @@ def bid(path):
 
 def main():
     ia = {e["path"]: e for e in json.load(open(os.path.join(HERE, "ia_sources.json"), encoding="utf-8"))}
+    ab_file = os.path.join(HERE, "arbre_sources.json")
+    ab = {e["path"]: e for e in json.load(open(ab_file, encoding="utf-8"))} if os.path.exists(ab_file) else {}
     books = []
     for top in sorted(os.listdir(LIBRARY)):
         full_top = os.path.join(LIBRARY, top)
@@ -84,23 +86,39 @@ def main():
                 parts = rel.split("/")
                 sub = parts[1:-1]
                 e = ia.get(rel)
+                a = ab.get(rel)
                 b = {
                     "id": bid(rel),
                     "category": top,
                     "size": os.path.getsize(full),
                     "ext": ext[1:],
+                    "file": rel,  # local path, kept out of the public catalog
                 }
-                if e:
+                if a and not e:
+                    b.update(title=a["title"], author=a["author"], year=a.get("year"), source="ab", ab=a["url"], abpdf=a["pdf"])
+                elif e:
                     b.update(title=re.sub(r"\s*\(\d{4}\)\s*$", "", e["title"]), author=e["author"],
-                             year=year_of(e["title"]), source="pd", ia=e["ia"])
+                             year=year_of(e["title"]), source="pd", ia=e["ia"], lang=e.get("lang"))
                 else:
                     b.update(title=clean_title(f), author=sub[0] if sub else "",
                              collection="/".join(sub[1:]) if len(sub) > 1 else "",
                              year=year_of(f), source="own", path=rel)
                 books.append({k: v for k, v in b.items() if v not in ("", None)})
 
+    # Online-only public-domain books (read through the Internet Archive, no local copy).
+    have = {b.get("ia") for b in books}
+    extra_file = os.path.join(HERE, "ia_extra.json")
+    extra = json.load(open(extra_file, encoding="utf-8")) if os.path.exists(extra_file) else []
+    for e in extra:
+        if e["ia"] in have or is_confidential(e["title"]):
+            continue
+        have.add(e["ia"])
+        b = {"id": bid("ia:" + e["ia"]), "category": e["category"], "title": e["title"], "author": e["author"],
+             "year": e.get("year"), "source": "pd", "ia": e["ia"], "pages": e.get("pages"), "lang": e.get("lang"), "online": True}
+        books.append({k: v for k, v in b.items() if v not in ("", None)})
+
     os.makedirs(DATA, exist_ok=True)
-    public = [b for b in books if b["source"] == "pd"]
+    public = [{k: v for k, v in b.items() if k != "file"} for b in books if b["source"] in ("pd", "ab")]
     for name, items in (("catalog.json", public), ("catalog.private.json", books)):
         with open(os.path.join(DATA, name), "w", encoding="utf-8") as fh:
             json.dump({"books": items}, fh, ensure_ascii=False, separators=(",", ":"))

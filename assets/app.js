@@ -144,6 +144,8 @@
   const catBlurb = (c) => catText(c)[1] || "";
   const fmtSize = (b) => (b > 1048576 ? (b / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(b / 1024)) + " KB");
   const hasOwn = () => BOOKS.some((b) => b.source === "own");
+  const SRC_KEYS = { pd: "src.ia", ab: "src.ab", own: "src.own" };
+  const sources = () => ["pd", "ab", "own"].filter((k) => BOOKS.some((b) => b.source === k));
 
   function seedOf(str) {
     let h = 2166136261;
@@ -516,15 +518,14 @@
     if (cat) chips.push(["cat", catLabel(cat)]);
     if (p.get("author")) chips.push(["author", p.get("author")]);
     if (cen) chips.push(["c", centuryLabel(+cen)]);
-    if (src) chips.push(["src", src === "pd" ? t("src.pd") : t("src.ownChip")]);
+    if (src) chips.push(["src", src === "own" ? t("src.ownChip") : t(SRC_KEYS[src] || "src.pd")]);
     const sorts = ["relevance", "title", "author", "oldest", "newest"];
 
     main.innerHTML = `<div class="browse">
       <aside class="filters" id="filters" aria-label="${esc(t("f.filters"))}">
-        ${hasOwn() ? `<div><h4>${esc(t("f.source"))}</h4><div class="seg">
+        ${sources().length > 1 ? `<div><h4>${esc(t("f.source"))}</h4><div class="seg">
           <button type="button" data-set="src" data-val="" aria-pressed="${!src}">${esc(t("src.all"))}</button>
-          <button type="button" data-set="src" data-val="pd" aria-pressed="${src === "pd"}">${esc(t("src.pd"))}</button>
-          <button type="button" data-set="src" data-val="own" aria-pressed="${src === "own"}">${esc(t("src.own"))}</button></div></div>` : ""}
+          ${sources().map((k) => `<button type="button" data-set="src" data-val="${k}" aria-pressed="${src === k}">${esc(t(SRC_KEYS[k]))}</button>`).join("")}</div></div>` : ""}
         <div><h4>${esc(t("f.sort"))}</h4><select class="sort" id="sortSel" aria-label="${esc(t("f.sort"))}">
           ${sorts.map((v) => `<option value="${v}"${v === sort ? " selected" : ""}>${esc(t("sort." + v))}</option>`).join("")}</select></div>
         <div><h4>${esc(t("f.subjects"))}</h4><div class="facet">
@@ -568,16 +569,22 @@
     const related = pool.slice(0, 14);
     const facts = [[t("fact.subject"), `<a href="#/browse?cat=${encodeURIComponent(b.category)}">${esc(label)}</a>${LANG !== "fr" ? `<br><span class="muted">${esc(b.category)}</span>` : ""}`]];
     if (b.year) facts.push([t("fact.edition"), esc(b.year)]);
-    facts.push([t("fact.format"), `${esc(b.ext.toUpperCase())} · ${fmtSize(b.size)}`]);
+    if (b.ext) facts.push([t("fact.format"), `${esc(b.ext.toUpperCase())} · ${fmtSize(b.size)}`]);
+    else if (b.pages) facts.push([t("fact.format"), esc(t("pages", { n: b.pages }))]);
+    if (b.lang) facts.push([t("fact.lang"), esc(t("lang." + b.lang))]);
     if (b.collection) facts.push([t("fact.collection"), esc(b.collection)]);
     const fig = figure(b);
     facts.push([t("fact.figure"), `${esc(t("fig." + fig.fam))}<br><span class="muted eq">${esc(fig.cap)}</span>`]);
-    facts.push([t("fact.source"), b.source === "pd" ? `Internet Archive<br><span class="muted">${esc(b.ia)}</span>` : esc(t("source.personal"))]);
+    facts.push([t("fact.source"), b.source === "pd" ? `Internet Archive<br><span class="muted">${esc(b.ia)}</span>`
+      : b.source === "ab" ? `<a href="${esc(b.ab)}" target="_blank" rel="noopener">L'Arbre d'Or</a>` : esc(t("source.personal"))]);
 
     const actions = b.source === "pd"
       ? `<button class="btn primary" type="button" id="readBtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 5h7a3 3 0 0 1 3 3v12a2 2 0 0 0-2-2H2zM22 5h-7a3 3 0 0 0-3 3v12a2 2 0 0 1 2-2h8z"/></svg><span>${esc(t("read"))}</span></button>
          <a class="btn" href="https://archive.org/download/${encodeURIComponent(b.ia)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 21h16"/></svg>${esc(t("download"))}</a>
          <a class="btn" href="https://archive.org/details/${encodeURIComponent(b.ia)}" target="_blank" rel="noopener">${esc(t("viewIA"))}</a>`
+      : b.source === "ab"
+      ? `<a class="btn primary" href="${esc(b.abpdf)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 5h7a3 3 0 0 1 3 3v12a2 2 0 0 0-2-2H2zM22 5h-7a3 3 0 0 0-3 3v12a2 2 0 0 1 2-2h8z"/></svg>${esc(t("readPdf"))}</a>
+         <a class="btn" href="${esc(b.ab)}" target="_blank" rel="noopener">${esc(t("viewAB"))}</a>`
       : `<a class="btn primary" href="${fileUrl(b.path)}" target="_blank" rel="noopener">${esc(t("open"))}</a>`;
     const relTitle = related.length && sameAuthor(related[0]) ? t("related.author", { a: b.author }) : t("related.cat", { c: label });
 
@@ -585,7 +592,7 @@
       <nav class="crumbs" aria-label="Breadcrumb"><a href="#/browse">${esc(t("crumb.library"))}</a> / <a href="#/browse?cat=${encodeURIComponent(b.category)}">${esc(label)}</a></nav>
       <div>${cover(b, true)}</div>
       <div class="book-info">
-        <span class="badge ${b.source === "pd" ? "pd" : ""}">${esc(t(b.source === "pd" ? "badge.pd" : "badge.own"))}</span>
+        <span class="badge ${b.source !== "own" ? "pd" : ""}">${esc(t(b.source === "pd" ? "badge.pd" : b.source === "ab" ? "badge.ab" : "badge.own"))}</span>
         <h1>${esc(b.title)}</h1>
         ${b.author ? `<div class="by">${esc(t("by", { a: "\u0000" })).replace("\u0000", `<a href="#/browse?author=${encodeURIComponent(b.author)}">${esc(b.author)}</a>`)}</div>` : ""}
         <dl class="facts">${facts.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`).join("")}</dl>
@@ -594,7 +601,7 @@
           <button class="btn ghost" type="button" id="saveBtn" aria-pressed="${SHELF.has(b.id)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span>${esc(t(SHELF.has(b.id) ? "saved" : "save"))}</span></button>
           <button class="btn ghost" type="button" id="shareBtn"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg>${esc(t("share"))}</button>
         </div>
-        ${b.source === "pd" ? `<p class="note">${esc(t("note.pd"))}</p>` : ""}
+        ${b.source === "pd" ? `<p class="note">${esc(t("note.pd"))}</p>` : b.source === "ab" ? `<p class="note">${esc(t("note.ab"))}</p>` : ""}
       </div>
       <div class="reader" id="reader" hidden></div>
       ${related.length ? `<section class="related section"><div class="section-head"><div><h2>${esc(relTitle)}</h2></div></div>
@@ -633,7 +640,7 @@
   }
 
   function viewAbout() {
-    const pd = BOOKS.filter((b) => b.source === "pd").length;
+    const pd = BOOKS.filter((b) => b.source !== "own").length;
     main.innerHTML = `<div class="prose">${t("about").replace("{n}", pd)}</div>`;
   }
 

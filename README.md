@@ -31,6 +31,7 @@ The local server listens on `127.0.0.1` only. It serves a personal file only if 
 After adding books to the library folders, run `tools/build_catalog.py`, then commit `data/catalog.json` and push. Vercel redeploys automatically.
 
 - Public-domain books are matched to their Internet Archive identifiers through `tools/ia_sources.json`.
+- `tools/ia_extra.json` lists more public-domain books that are read online only, with no local copy. Each one has been checked: it is not in a lending collection, it opens in the Internet Archive reader, and it was published before 1931 or its author died before 1956.
 - Every other file is treated as personal: it appears only in `data/catalog.private.json`, which is git-ignored.
 
 ## Structure
