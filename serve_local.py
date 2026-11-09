@@ -69,7 +69,7 @@ def main():
     args = ap.parse_args()
     srv = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     url = f"http://127.0.0.1:{args.port}/"
-    print(f"Arcana Library running privately at {url}  (Ctrl+C to stop)")
+    print(f"KLibrary running privately at {url}  (Ctrl+C to stop)")
     if not args.no_browser:
         webbrowser.open(url)
     try:

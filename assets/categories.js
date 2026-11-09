@@ -1,5 +1,5 @@
 // Display metadata for each library folder (folder name -> English label, hue, blurb).
-window.ARCANA_CATEGORIES = {
+window.KLIBRARY_CATEGORIES = {
   "Magie et Grimoires": { en: "Magic & Grimoires", hue: 352, blurb: "Grimoires, talismans, ceremonial and natural magic, from the Petit Albert and the Red Dragon to Agrippa and the Comte de Gabalis." },
   "Démonologie et Sorcellerie": { en: "Demonology & Witchcraft", hue: 330, blurb: "Renaissance demonologists and witch-trial literature: Bodin, Boguet, De Lancre, Wier, the Dictionnaire infernal." },
   "Occultisme": { en: "Occultism", hue: 268, blurb: "The French occult revival: Papus, Éliphas Lévi, Stanislas de Guaita, Péladan, Sédir, Saint-Yves d'Alveydre." },

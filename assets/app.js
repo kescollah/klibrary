@@ -1,8 +1,8 @@
 (function () {
   "use strict";
 
-  const CFG = window.ARCANA_CONFIG || {};
-  const CATS = window.ARCANA_CATEGORIES || {};
+  const CFG = window.KLIBRARY_CONFIG || {};
+  const CATS = window.KLIBRARY_CATEGORIES || {};
   const PAGE = 48;
   const main = document.getElementById("main");
   const qInput = document.getElementById("q");
@@ -249,7 +249,7 @@
   function viewBook(id) {
     const b = BY_ID.get(id);
     if (!b) { main.innerHTML = `<div class="empty">This book is not in the catalog.</div>`; return; }
-    document.title = `${b.title} · Arcana Library`;
+    document.title = `${b.title} · KLibrary`;
     const i = catInfo(b.category);
     const pool = BOOKS.filter((x) => x.id !== b.id && ((b.author && x.author === b.author) || x.category === b.category));
     pool.sort((x, y) => (b.author && y.author === b.author) - (b.author && x.author === b.author) || (x.year || 9999) - (y.year || 9999));
@@ -300,7 +300,7 @@
     const pd = BOOKS.filter((b) => b.source === "pd").length;
     main.innerHTML = `<div class="prose">
       <h1>About the library</h1>
-      <p>Arcana Library gathers French-language books on magic, occultism, alchemy, Kabbalah, Martinism, mysticism and the history of witchcraft. It focuses on rare and hard-to-find titles: early grimoires, Renaissance demonologists, and the occult revival of nineteenth-century Paris.</p>
+      <p>KLibrary gathers French-language books on magic, occultism, alchemy, Kabbalah, Martinism, mysticism and the history of witchcraft. It focuses on rare and hard-to-find titles: early grimoires, Renaissance demonologists, and the occult revival of nineteenth-century Paris.</p>
       <h2>Public domain</h2>
       <p>The ${pd} public-domain books here were written by authors who died more than seventy years ago. They were scanned by the Bibliothèque nationale de France, the Bibliothèque Sainte-Geneviève, BIU Santé, the Wellcome Collection and Google Books, and they are hosted by the <a href="https://archive.org" rel="noopener">Internet Archive</a>. Reading and downloading go directly through their servers.</p>
       <h2>How to use it</h2>
@@ -315,7 +315,7 @@
   // ---------- render loop ----------
   function render() {
     const { path, params } = parseHash();
-    document.title = "Arcana Library";
+    document.title = "KLibrary";
     document.querySelectorAll(".nav a").forEach((a) => a.classList.toggle("active", a.getAttribute("href") === "#" + path));
     if (document.activeElement !== qInput) qInput.value = path === "/browse" ? params.get("q") || "" : "";
     if (path.startsWith("/book/")) viewBook(decodeURIComponent(path.slice(6)));
@@ -363,7 +363,7 @@
     const cur = root.getAttribute("data-theme") || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
     const next = cur === "light" ? "dark" : "light";
     root.setAttribute("data-theme", next);
-    try { localStorage.setItem("arcana-theme", next); } catch (e) {}
+    try { localStorage.setItem("klibrary-theme", next); } catch (e) {}
   });
 
   // ---------- boot ----------
