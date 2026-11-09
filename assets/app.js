@@ -74,28 +74,188 @@
     };
   }
 
-  // Procedural sigil: a unique geometric figure per book.
-  function sigil(id) {
-    const r = rng(seedOf(id));
-    const n = 3 + Math.floor(r() * 7);
-    const step = n > 4 && r() > 0.45 ? 2 : 1;
-    const rot = r() * Math.PI * 2;
-    const pts = [];
-    for (let i = 0; i < n; i++) {
-      const a = rot + (i * 2 * Math.PI) / n;
-      pts.push([50 + 34 * Math.cos(a), 50 + 34 * Math.sin(a)]);
+  // ---------- mathematical cover figures ----------
+  // Each book gets a real mathematical curve, computed from its equation and
+  // parameterised deterministically by the book id. The equation is printed on the cover.
+  const TAU = Math.PI * 2;
+  const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+  const pick = (r, arr) => arr[Math.floor(r() * arr.length)];
+  const between = (r, lo, hi) => lo + Math.floor(r() * (hi - lo + 1));
+
+  // Fit point sets (math coords, y up) into the 100x100 box, keeping aspect ratio.
+  function fitter(sets, pad) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const s of sets) for (const [x, y] of s) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    const s = (100 - 2 * pad) / Math.max(x1 - x0, y1 - y0, 1e-9);
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    const f = (x, y) => [50 + (x - cx) * s, 50 - (y - cy) * s];
+    f.scale = s;
+    return f;
+  }
+  const fx = (n) => n.toFixed(1);
+  const poly = (pts, f) => "M" + pts.map(([x, y]) => { const q = f(x, y); return fx(q[0]) + " " + fx(q[1]); }).join("L");
+  const circlePts = (cx, cy, rad, n = 120) => Array.from({ length: n + 1 }, (_, i) => [cx + rad * Math.cos((i * TAU) / n), cy + rad * Math.sin((i * TAU) / n)]);
+  const faint = (d) => `<path d="${d}" class="g"/>`;
+
+  const FIGURES = {
+    // Rose curve (rhodonea): r = cos(kθ), k = n/d in lowest terms.
+    rose(r) {
+      let n, d;
+      do { n = between(r, 2, 8); d = pick(r, [1, 1, 2, 3, 4, 5]); } while (n === d || gcd(n, d) !== 1);
+      const k = n / d, end = (n * d) % 2 ? Math.PI * d : TAU * d, N = Math.min(1600, 240 * d);
+      const pts = Array.from({ length: N + 1 }, (_, i) => { const t = (i * end) / N, q = Math.cos(k * t); return [q * Math.cos(t), q * Math.sin(t)]; });
+      const unit = circlePts(0, 0, 1);
+      const f = fitter([unit], 7);
+      return { fam: "rose", cap: d === 1 ? `r = cos ${n}θ` : `r = cos(${n}θ/${d})`, svg: faint(poly(unit, f)) + `<path d="${poly(pts, f)}"/>` };
+    },
+    // Hypotrochoid / epitrochoid: a point at distance d on a circle of radius r rolling inside/outside a fixed circle R.
+    trochoid(r, forceEpi) {
+      const epi = forceEpi || r() < 0.4;
+      let R, q, g;
+      do {
+        R = between(r, 4, 11); q = between(r, 2, epi ? 7 : R - 1); g = gcd(R, q);
+      } while ((!epi && 2 * q === R) || q / g > 9 || q / g < 2);
+      const d = between(r, 1, q + 1);
+      const end = (TAU * q) / g, N = Math.min(1800, Math.round(180 * (q / g)));
+      const pts = Array.from({ length: N + 1 }, (_, i) => {
+        const t = (i * end) / N;
+        return epi
+          ? [(R + q) * Math.cos(t) - d * Math.cos(((R + q) / q) * t), (R + q) * Math.sin(t) - d * Math.sin(((R + q) / q) * t)]
+          : [(R - q) * Math.cos(t) + d * Math.cos(((R - q) / q) * t), (R - q) * Math.sin(t) - d * Math.sin(((R - q) / q) * t)];
+      });
+      const fixed = circlePts(0, 0, R);
+      const f = fitter([pts, fixed], 7);
+      return { fam: epi ? "epi" : "hypo", cap: `R=${R}, r=${q}, d=${d}`, svg: faint(poly(fixed, f)) + `<path d="${poly(pts, f)}"/>` };
+    },
+    epi(r) { return FIGURES.trochoid(r, true); },
+    // Lissajous curve: x = sin(at + δ), y = sin(bt).
+    lissajous(r) {
+      const [a, b] = pick(r, [[1, 2], [2, 3], [3, 4], [3, 5], [4, 5], [5, 6], [2, 5], [1, 3], [3, 7], [5, 7], [4, 7]]);
+      const [delta, dl] = pick(r, [[Math.PI / 2, "π/2"], [Math.PI / 4, "π/4"], [Math.PI / 3, "π/3"], [Math.PI / 6, "π/6"]]);
+      const N = 1000;
+      const pts = Array.from({ length: N + 1 }, (_, i) => { const t = (i * TAU) / N; return [Math.sin(a * t + delta), Math.sin(b * t)]; });
+      const box = [[-1, -1], [1, -1], [1, 1], [-1, 1], [-1, -1]];
+      const f = fitter([box], 9);
+      return { fam: "lissajous", cap: `${a}:${b}, δ = ${dl}`, svg: faint(poly(box, f)) + `<path d="${poly(pts, f)}"/>` };
+    },
+    // Regular star polygon {n/k}, with its circumcircle and convex hull {n}.
+    star(r) {
+      let n, k;
+      do { n = between(r, 5, 12); k = between(r, 2, Math.floor((n - 1) / 2)); } while (gcd(n, k) !== 1 || 2 * k >= n);
+      const v = (i) => [Math.cos(Math.PI / 2 + (i * TAU) / n), Math.sin(Math.PI / 2 + (i * TAU) / n)];
+      const starPts = Array.from({ length: n + 1 }, (_, i) => v((i * k) % n));
+      const hull = Array.from({ length: n + 1 }, (_, i) => v(i % n));
+      const circ = circlePts(0, 0, 1);
+      const f = fitter([circ], 8);
+      return { fam: "star", cap: `{${n}/${k}}`, svg: faint(poly(circ, f)) + faint(poly(hull, f)) + `<path d="${poly(starPts, f)}"/>` };
+    },
+    // Modular multiplication on a circle: chord from k to m·k mod N (envelopes: cardioid, nephroid…).
+    modular(r) {
+      const N = pick(r, [72, 90, 100, 120, 144, 180]), m = between(r, 2, 9);
+      const pt = (i) => [Math.cos((i * TAU) / N), Math.sin((i * TAU) / N)];
+      const circ = circlePts(0, 0, 1);
+      const f = fitter([circ], 8);
+      let d = "";
+      for (let i = 0; i < N; i++) {
+        const j = (m * i) % N;
+        if (j === i) continue;
+        const a = f(...pt(i)), b = f(...pt(j));
+        d += `M${fx(a[0])} ${fx(a[1])}L${fx(b[0])} ${fx(b[1])}`;
+      }
+      return { fam: "modular", cap: `k ↦ ${m}k mod ${N}`, svg: faint(poly(circ, f)) + `<path d="${d}" class="thin"/>` };
+    },
+    // Maurer rose: points of r = sin(nθ) at θ = k·d degrees, k = 0..360, joined in order.
+    maurer(r) {
+      const n = between(r, 2, 7), d = pick(r, [11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97]);
+      const at = (deg) => { const t = (deg * Math.PI) / 180, q = Math.sin(n * t); return [q * Math.cos(t), q * Math.sin(t)]; };
+      const walk = Array.from({ length: 361 }, (_, k) => at(k * d));
+      const rose = Array.from({ length: 721 }, (_, i) => at(i / 2));
+      const f = fitter([circlePts(0, 0, 1)], 7);
+      return { fam: "maurer", cap: `n=${n}, d=${d}°`, svg: `<path d="${poly(walk, f)}" class="thin"/>` + `<path d="${poly(rose, f)}"/>` };
+    },
+    // Golden spiral: quarter arcs inscribed in successive Fibonacci squares.
+    golden(r) {
+      const F = [1, 1, 2, 3, 5, 8, 13, 21, 34], count = between(r, 7, 9);
+      let bx0 = 0, by0 = 0, bx1 = 1, by1 = 1;
+      const squares = [], arcs = [];
+      for (let i = 0; i < count; i++) {
+        const s = F[i];
+        let x, y, cx, cy;
+        if (i === 0) { x = 0; y = 0; cx = 0; cy = 0; }
+        else {
+          const dir = (i - 1) % 4;
+          if (dir === 0) { x = bx1; y = by0; cx = x; cy = y + s; }
+          else if (dir === 1) { x = bx0; y = by1; cx = x; cy = y; }
+          else if (dir === 2) { x = bx0 - s; y = by0; cx = x + s; cy = y; }
+          else { x = bx0; y = by0 - s; cx = x + s; cy = y + s; }
+          bx0 = Math.min(bx0, x); by0 = Math.min(by0, y); bx1 = Math.max(bx1, x + s); by1 = Math.max(by1, y + s);
+        }
+        squares.push([[x, y], [x + s, y], [x + s, y + s], [x, y + s], [x, y]]);
+        // arc between the two corners adjacent to the centre corner, sweeping through the square
+        const mx = x + s / 2 - cx, my = y + s / 2 - cy, mid = Math.atan2(my, mx);
+        const arc = Array.from({ length: 25 }, (_, j) => { const a = mid - Math.PI / 4 + (j * Math.PI) / 2 / 24; return [cx + s * Math.cos(a), cy + s * Math.sin(a)]; });
+        if (arcs.length) {
+          const [lx, ly] = arcs[arcs.length - 1];
+          const d0 = Math.hypot(arc[0][0] - lx, arc[0][1] - ly), d1 = Math.hypot(arc[24][0] - lx, arc[24][1] - ly);
+          if (d1 < d0) arc.reverse();
+        }
+        arcs.push(...arc);
+      }
+      const rot = between(r, 0, 3), mir = r() < 0.5;
+      const tr = ([x, y]) => { for (let i = 0; i < rot; i++) [x, y] = [-y, x]; return mir ? [-x, y] : [x, y]; };
+      const sq = squares.map((s) => s.map(tr)), sp = arcs.map(tr);
+      const f = fitter(sq, 8);
+      return { fam: "golden", cap: "φ = (1+√5)/2", svg: sq.map((s) => faint(poly(s, f))).join("") + `<path d="${poly(sp, f)}"/>` };
+    },
+    // Phyllotaxis (Vogel's model): seed k at angle k·137.508° and radius √k.
+    phyllo(r) {
+      const N = between(r, 140, 320), alpha = (137.50776 * Math.PI) / 180;
+      const pts = Array.from({ length: N }, (_, k) => [Math.sqrt(k) * Math.cos(k * alpha), Math.sqrt(k) * Math.sin(k * alpha)]);
+      const f = fitter([circlePts(0, 0, Math.sqrt(N))], 9);
+      const d = pts.map(([x, y]) => { const q = f(x, y); return `M${fx(q[0])} ${fx(q[1])}h0`; }).join("");
+      return { fam: "phyllo", cap: `n = ${N}, 137.5°`, svg: `<path d="${d}" class="dots"/>` };
+    },
+  };
+
+  const FIG_BY_CAT = {
+    "Magie et Grimoires": ["star", "maurer", "star", "modular"],
+    "Démonologie et Sorcellerie": ["star", "maurer"],
+    "Occultisme": ["maurer", "star", "trochoid", "rose"],
+    "Alchimie": ["golden", "phyllo", "trochoid"],
+    "Kabbale et Hermétisme": ["star", "modular", "rose"],
+    "Martinisme et Illuminisme": ["star", "rose", "maurer"],
+    "Rose-Croix": ["rose", "maurer", "star"],
+    "Tarot": ["star", "rose"],
+    "Astrologie": ["trochoid", "epi"],
+    "Divination et Numérologie": ["modular", "phyllo"],
+    "Magnétisme et Hypnose": ["lissajous"],
+    "Spiritisme": ["lissajous", "rose"],
+    "Plan astral, Rêves et Conscience": ["lissajous", "trochoid"],
+    "Tradition et Ésotérisme": ["golden", "star", "modular"],
+    "Gnose et Apocryphes": ["rose", "maurer"],
+    "Théosophie et Anthroposophie": ["trochoid", "epi", "rose"],
+    "Mystique chrétienne": ["rose", "golden"],
+    "Anges, Prières et Psaumes": ["rose", "star"],
+    "Franc-maçonnerie": ["golden", "star"],
+    "Vaudou et traditions afro-caribéennes": ["maurer", "star", "modular"],
+    "Magie sexuelle et Tantra": ["rose", "lissajous"],
+    "Santé, Plantes et Énergétique": ["phyllo", "golden"],
+    "Développement personnel": ["golden", "phyllo"],
+    "Revues ésotériques": ["modular", "lissajous"],
+    "Prophéties": ["epi", "trochoid"],
+  };
+  const ALL_FIGS = ["rose", "trochoid", "lissajous", "star", "modular", "maurer", "golden", "phyllo"];
+  const FIG_CACHE = new Map();
+
+  function figure(b) {
+    let fig = FIG_CACHE.get(b.id);
+    if (!fig) {
+      const r = rng(seedOf(b.id));
+      const fam = pick(r, FIG_BY_CAT[b.category] || ALL_FIGS);
+      fig = FIGURES[fam](r);
+      FIG_CACHE.set(b.id, fig);
     }
-    let d = "";
-    for (let i = 0, k = 0; i <= n; i++, k = (k + step) % n) d += (i ? "L" : "M") + pts[k][0].toFixed(1) + " " + pts[k][1].toFixed(1);
-    let extra = "";
-    const dots = 1 + Math.floor(r() * 3);
-    for (let i = 0; i < dots; i++) {
-      const p = pts[Math.floor(r() * n)];
-      extra += `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${(2 + r() * 3).toFixed(1)}"/>`;
-    }
-    if (r() > 0.4) extra += `<circle cx="50" cy="50" r="${(8 + r() * 10).toFixed(1)}"/>`;
-    if (r() > 0.5) { const a = rot + r() * Math.PI; extra += `<path d="M${(50 + 46 * Math.cos(a)).toFixed(1)} ${(50 + 46 * Math.sin(a)).toFixed(1)}L${(50 - 46 * Math.cos(a)).toFixed(1)} ${(50 - 46 * Math.sin(a)).toFixed(1)}"/>`; }
-    return `<svg class="sigil" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46"/><path d="${d}Z"/>${extra}</svg>`;
+    return fig;
   }
 
   // Decorative astrolabe for the home hero.
@@ -121,10 +281,12 @@
   }
 
   function cover(b, large) {
-    return `<div class="cover${large ? " lg" : ""}" style="--h:${b._h}">${sigil(b.id)}
+    const fig = figure(b);
+    return `<div class="cover${large ? " lg" : ""}" style="--h:${b._h}">
+      <svg class="figure" viewBox="0 0 100 100" aria-hidden="true">${fig.svg}</svg>
       <span class="c-cat">${esc(catLabel(b.category))}</span>
       <span class="c-title">${esc(b.title)}</span>
-      <span class="c-year">${b.year ? esc(b.year) : ""}</span></div>`;
+      <span class="c-foot"><span class="c-year">${b.year ? esc(b.year) : ""}</span><span class="c-eq">${large ? esc(t("fig." + fig.fam)) + " · " : ""}${esc(fig.cap)}</span></span></div>`;
   }
   function card(b) {
     return `<a class="book" href="#/book/${b.id}">${cover(b)}
@@ -292,6 +454,8 @@
     if (b.year) facts.push([t("fact.edition"), esc(b.year)]);
     facts.push([t("fact.format"), `${esc(b.ext.toUpperCase())} · ${fmtSize(b.size)}`]);
     if (b.collection) facts.push([t("fact.collection"), esc(b.collection)]);
+    const fig = figure(b);
+    facts.push([t("fact.figure"), `${esc(t("fig." + fig.fam))}<br><span class="muted eq">${esc(fig.cap)}</span>`]);
     facts.push([t("fact.source"), b.source === "pd" ? `Internet Archive<br><span class="muted">${esc(b.ia)}</span>` : esc(t("source.personal"))]);
 
     const actions = b.source === "pd"

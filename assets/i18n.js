@@ -7,6 +7,16 @@ window.KLIBRARY_LANGS = [
 
 window.KLIBRARY_I18N = {
   en: {
+    "fact.figure": "Cover figure",
+    "fig.rose": "Rose curve",
+    "fig.hypo": "Hypotrochoid",
+    "fig.epi": "Epitrochoid",
+    "fig.lissajous": "Lissajous curve",
+    "fig.star": "Star polygon",
+    "fig.modular": "Modular times table",
+    "fig.maurer": "Maurer rose",
+    "fig.golden": "Golden spiral",
+    "fig.phyllo": "Phyllotaxis (Vogel)",
     "skip": "Skip to content",
     "nav.browse": "Browse",
     "nav.about": "About",
@@ -91,6 +101,16 @@ window.KLIBRARY_I18N = {
   },
 
   fr: {
+    "fact.figure": "Figure de couverture",
+    "fig.rose": "Rosace",
+    "fig.hypo": "Hypotrochoïde",
+    "fig.epi": "Épitrochoïde",
+    "fig.lissajous": "Courbe de Lissajous",
+    "fig.star": "Polygone étoilé",
+    "fig.modular": "Table de multiplication modulaire",
+    "fig.maurer": "Rose de Maurer",
+    "fig.golden": "Spirale d'or",
+    "fig.phyllo": "Phyllotaxie (Vogel)",
     "skip": "Aller au contenu",
     "nav.browse": "Parcourir",
     "nav.about": "À propos",
@@ -175,6 +195,16 @@ window.KLIBRARY_I18N = {
   },
 
   ht: {
+    "fact.figure": "Figi kouvèti a",
+    "fig.rose": "Koub woz",
+    "fig.hypo": "Ipotwokoyid",
+    "fig.epi": "Epitwokoyid",
+    "fig.lissajous": "Koub Lissajous",
+    "fig.star": "Poligòn zetwal",
+    "fig.modular": "Tab miltiplikasyon modilè",
+    "fig.maurer": "Woz Maurer",
+    "fig.golden": "Espiral lò",
+    "fig.phyllo": "Filotaksi (Vogel)",
     "skip": "Ale nan kontni an",
     "nav.browse": "Navige",
     "nav.about": "Konsènan",
