@@ -1,0 +1,10 @@
+{
+  "name": "KLibrary",
+  "short_name": "KLibrary",
+  "description": "Rare books of magic, mysticism and the hidden sciences.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0d15",
+  "theme_color": "#0f0d15",
+  "icons": [{ "src": "assets/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

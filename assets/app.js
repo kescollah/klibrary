@@ -15,6 +15,91 @@
   let shown = PAGE;
   let LANG = pickLang();
 
+  // ---------- local storage (shelf, recently opened) ----------
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+  };
+  let SHELF = new Set(store.get("klibrary-shelf", []));
+  let RECENT = store.get("klibrary-recent", []);
+  function toggleShelf(id) {
+    if (SHELF.has(id)) SHELF.delete(id); else SHELF.add(id);
+    store.set("klibrary-shelf", [...SHELF]);
+    updateShelfCount();
+    return SHELF.has(id);
+  }
+  function pushRecent(id) {
+    RECENT = [id, ...RECENT.filter((x) => x !== id)].slice(0, 16);
+    store.set("klibrary-recent", RECENT);
+  }
+  function updateShelfCount() {
+    const el = document.getElementById("shelfCount");
+    const n = [...SHELF].filter((id) => !BOOKS.length || BY_ID.has(id)).length;
+    el.textContent = n;
+    el.hidden = !n;
+  }
+
+  // ---------- centuries ----------
+  const century = (y) => Math.floor((y - 1) / 100) + 1;
+  function roman(n) {
+    const map = [[10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]];
+    let s = "";
+    for (const [v, r] of map) while (n >= v) { s += r; n -= v; }
+    return s;
+  }
+  function centuryLabel(c) {
+    if (LANG === "fr") return roman(c) + "ᵉ siècle";
+    if (LANG === "ht") return c + "yèm syèk";
+    const m = c % 100, suf = m >= 11 && m <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" }[c % 10] || "th");
+    return c + suf + " century";
+  }
+
+  // ---------- toast ----------
+  let toastTimer;
+  function toast(msg) {
+    const el = document.getElementById("toast");
+    el.textContent = msg;
+    el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove("show"), 2200);
+  }
+
+  // ---------- "did you mean" (typo-tolerant suggestions) ----------
+  let VOCAB = null;
+  function lev(a, b) {
+    if (Math.abs(a.length - b.length) > 2) return 9;
+    const row = Array.from({ length: b.length + 1 }, (_, i) => i);
+    for (let i = 1; i <= a.length; i++) {
+      let prev = row[0]; row[0] = i;
+      for (let j = 1; j <= b.length; j++) {
+        const tmp = row[j];
+        row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+        prev = tmp;
+      }
+    }
+    return row[b.length];
+  }
+  function suggest(q) {
+    if (!VOCAB) {
+      const words = new Map();
+      for (const b of BOOKS) for (const w of b._hay.split(/[^a-z0-9]+/)) if (w.length >= 4) words.set(w, (words.get(w) || 0) + 1);
+      VOCAB = [...words.entries()];
+    }
+    let changed = false;
+    const fixed = norm(q).split(/\s+/).filter(Boolean).map((tk) => {
+      if (BOOKS.some((b) => b._hay.includes(tk))) return tk;
+      const max = tk.length > 6 ? 2 : 1;
+      let best = null, bd = 9, bf = 0;
+      for (const [w, f] of VOCAB) {
+        const d = lev(tk, w);
+        if (d < bd || (d === bd && f > bf)) { best = w; bd = d; bf = f; }
+      }
+      if (best && bd <= max) { changed = true; return best; }
+      return tk;
+    }).join(" ");
+    return changed && search(BOOKS, fixed).length ? fixed : null;
+  }
+
   // ---------- i18n ----------
   function pickLang() {
     const ok = (c) => c && I18N[c];
@@ -289,7 +374,7 @@
       <span class="c-foot"><span class="c-year">${b.year ? esc(b.year) : ""}</span><span class="c-eq">${large ? esc(t("fig." + fig.fam)) + " · " : ""}${esc(fig.cap)}</span></span></div>`;
   }
   function card(b) {
-    return `<a class="book" href="#/book/${b.id}">${cover(b)}
+    return `<a class="book${SHELF.has(b.id) ? " saved" : ""}" href="#/book/${b.id}">${cover(b)}
       <span class="meta"><span class="t">${esc(b.title)}</span>
       <span class="a">${esc(b.author || catLabel(b.category))}</span></span></a>`;
   }
@@ -303,7 +388,7 @@
   function go(path, params, replace) {
     const qs = params && [...params.keys()].length ? "?" + params.toString() : "";
     const url = "#" + path + qs;
-    if (replace) { history.replaceState(null, "", url); render(); } else location.hash = url;
+    if (replace) { history.replaceState(null, "", url); render(); } else { navByLink = true; location.hash = url; }
   }
 
   // ---------- search & filter ----------
@@ -331,8 +416,9 @@
   };
   function filtered(p, skip) {
     let list = BOOKS;
-    const src = p.get("src"), cat = p.get("cat"), author = p.get("author");
+    const src = p.get("src"), cat = p.get("cat"), author = p.get("author"), cen = +p.get("c") || 0;
     if (src && skip !== "src") list = list.filter((b) => b.source === src);
+    if (cen && skip !== "c") list = list.filter((b) => b.year && century(b.year) === cen);
     if (cat && skip !== "cat") list = list.filter((b) => b.category === cat);
     if (author && skip !== "author") list = list.filter((b) => (b.author || "") === author);
     return search(list, p.get("q") || "");
@@ -353,6 +439,7 @@
     const rare = pd.filter((b) => magic.has(b.category) && b.year).sort((a, b) => a.year - b.year).slice(0, 18);
     const early = pd.filter((b) => b.year && !magic.has(b.category)).sort((a, b) => a.year - b.year).slice(0, 14);
     const cats = counts(BOOKS.map((b) => [b]), "category");
+    const recent = RECENT.map((id) => BY_ID.get(id)).filter(Boolean).slice(0, 14);
     main.innerHTML = `
       <div class="hero-wrap"><section class="hero">
         <span class="eyebrow">${esc(t("home.eyebrow"))}</span>
@@ -370,10 +457,14 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>${esc(t("btn.random"))}</button>
         </div>
       </section>${astrolabe()}</div>
+      ${recent.length ? `<section class="section">
+        <div class="section-head"><div><h2>${esc(t("recent.title"))}</h2></div><a href="#/shelf">${esc(t("nav.shelf"))} →</a></div>
+        <div class="shelf">${recent.map(card).join("")}</div></section>` : ""}
       ${rare.length ? `<section class="section">
         <div class="section-head"><div><h2>${esc(t("rare.title"))}</h2><p>${esc(t("rare.sub"))}</p></div>
         <a href="#/browse?cat=${encodeURIComponent("Magie et Grimoires")}&sort=oldest">${esc(t("rare.all"))}</a></div>
         <div class="shelf">${rare.map(card).join("")}</div></section>` : ""}
+      ${timeline()}
       <section class="section">
         <div class="section-head"><div><h2>${esc(t("subjects.title"))}</h2><p>${esc(t("subjects.sub", { n: cats.length }))}</p></div></div>
         <div class="cat-grid">${cats.map(([c, n]) => `<a class="cat-card" style="--h:${catInfo(c).hue}" href="#/browse?cat=${encodeURIComponent(c)}">
@@ -383,6 +474,21 @@
         <div class="section-head"><div><h2>${esc(t("early.title"))}</h2><p>${esc(t("early.sub"))}</p></div>
         <a href="#/browse?sort=oldest">${esc(t("early.all"))}</a></div>
         <div class="shelf">${early.map(card).join("")}</div></section>` : ""}`;
+  }
+
+  // Books per century, as a clickable bar chart.
+  function timeline() {
+    const m = new Map();
+    for (const b of BOOKS) if (b.year && b.year >= 1401 && b.year <= 2100) { const c = century(b.year); m.set(c, (m.get(c) || 0) + 1); }
+    if (m.size < 2) return "";
+    const rows = [...m.entries()].sort((a, b) => a[0] - b[0]);
+    const max = Math.max(...rows.map((r) => r[1]));
+    return `<section class="section">
+      <div class="section-head"><div><h2>${esc(t("timeline.title"))}</h2><p>${esc(t("timeline.sub"))}</p></div></div>
+      <div class="timeline">${rows.map(([c, n]) => `<a class="tl-row" href="#/browse?c=${c}&sort=oldest">
+        <span class="tl-label">${esc(centuryLabel(c))}</span>
+        <span class="tl-bar"><span style="width:${Math.max(2, (n / max) * 100).toFixed(1)}%"></span></span>
+        <span class="tl-n">${n}</span></a>`).join("")}</div></section>`;
   }
 
   function facetButtons(entries, param, p, labeler) {
@@ -397,13 +503,19 @@
     const res = filtered(p).sort(SORTS[sort] || SORTS.title);
     const catCounts = counts(filtered(p, "cat"), "category");
     const authCounts = counts(filtered(p, "author"), "author").slice(0, 40);
+    const cenMap = new Map();
+    for (const [b] of filtered(p, "c")) if (b.year && b.year >= 1401 && b.year <= 2100) { const c = century(b.year); cenMap.set(c, (cenMap.get(c) || 0) + 1); }
+    const cenCounts = [...cenMap.entries()].sort((a, b) => a[0] - b[0]).map(([c, n]) => [String(c), n]);
+    const cen = p.get("c");
+    const hint = !res.length && p.get("q") ? suggest(p.get("q")) : null;
     const src = p.get("src") || "";
     const cat = p.get("cat");
-    const title = cat ? esc(catLabel(cat)) : p.get("q") ? esc(t("browse.results", { q: p.get("q") })) : esc(t("browse.all"));
+    const title = cat ? esc(catLabel(cat)) : p.get("q") ? esc(t("browse.results", { q: p.get("q") })) : cen ? esc(centuryLabel(+cen)) : esc(t("browse.all"));
     const chips = [];
     if (p.get("q")) chips.push(["q", `“${p.get("q")}”`]);
     if (cat) chips.push(["cat", catLabel(cat)]);
     if (p.get("author")) chips.push(["author", p.get("author")]);
+    if (cen) chips.push(["c", centuryLabel(+cen)]);
     if (src) chips.push(["src", src === "pd" ? t("src.pd") : t("src.ownChip")]);
     const sorts = ["relevance", "title", "author", "oldest", "newest"];
 
@@ -418,6 +530,9 @@
         <div><h4>${esc(t("f.subjects"))}</h4><div class="facet">
           <button type="button" data-set="cat" data-val="" aria-pressed="${!cat}"><span>${esc(t("f.allSubjects"))}</span><span>${filtered(p, "cat").length}</span></button>
           ${facetButtons(catCounts, "cat", p, catLabel)}</div></div>
+        ${cenCounts.length > 1 || cen ? `<div><h4>${esc(t("f.century"))}</h4><div class="facet">
+          <button type="button" data-set="c" data-val="" aria-pressed="${!cen}"><span>${esc(t("f.allCenturies"))}</span><span>${filtered(p, "c").length}</span></button>
+          ${facetButtons(cenCounts, "c", p, (c) => centuryLabel(+c))}</div></div>` : ""}
         ${authCounts.length ? `<div><h4>${esc(t("f.authors"))}</h4><div class="facet">${facetButtons(authCounts, "author", p)}</div></div>` : ""}
       </aside>
       <section>
@@ -425,7 +540,7 @@
           <span class="count">${esc(countLabel(res.length))}</span>
           <button class="btn filter-toggle" type="button" id="filterToggle" aria-controls="filters">${esc(t("f.filters"))}</button></div>
         ${chips.length ? `<div class="chips">${chips.map(([k, l]) => `<button class="chip" type="button" data-set="${k}" data-val="">${esc(l)} ✕</button>`).join("")}</div>` : ""}
-        ${res.length ? `<div class="book-grid">${res.slice(0, shown).map(([b]) => card(b)).join("")}</div>` : `<div class="empty">${esc(t("empty"))}</div>`}
+        ${res.length ? `<div class="book-grid">${res.slice(0, shown).map(([b]) => card(b)).join("")}</div>` : `<div class="empty">${esc(t("empty"))}${hint ? `<p class="hint">${esc(t("didyoumean", { q: "\u0000" })).replace("\u0000", `<a href="#/browse?q=${encodeURIComponent(hint)}">${esc(hint)}</a>`)}</p>` : ""}</div>`}
         ${res.length > shown ? `<div class="more"><button class="btn" type="button" id="moreBtn">${esc(t("more", { n: res.length - shown }))}</button></div>` : ""}
       </section></div>`;
 
@@ -445,6 +560,7 @@
     const b = BY_ID.get(id);
     if (!b) { main.innerHTML = `<div class="empty">${esc(t("book.notFound"))}</div>`; return; }
     document.title = `${b.title} · KLibrary`;
+    pushRecent(b.id);
     const label = catLabel(b.category);
     const sameAuthor = (x) => b.author && x.author === b.author;
     const pool = BOOKS.filter((x) => x.id !== b.id && (sameAuthor(x) || x.category === b.category));
@@ -474,12 +590,32 @@
         ${b.author ? `<div class="by">${esc(t("by", { a: "\u0000" })).replace("\u0000", `<a href="#/browse?author=${encodeURIComponent(b.author)}">${esc(b.author)}</a>`)}</div>` : ""}
         <dl class="facts">${facts.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`).join("")}</dl>
         <div class="actions">${actions}</div>
+        <div class="actions secondary">
+          <button class="btn ghost" type="button" id="saveBtn" aria-pressed="${SHELF.has(b.id)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span>${esc(t(SHELF.has(b.id) ? "saved" : "save"))}</span></button>
+          <button class="btn ghost" type="button" id="shareBtn"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg>${esc(t("share"))}</button>
+        </div>
         ${b.source === "pd" ? `<p class="note">${esc(t("note.pd"))}</p>` : ""}
       </div>
       <div class="reader" id="reader" hidden></div>
       ${related.length ? `<section class="related section"><div class="section-head"><div><h2>${esc(relTitle)}</h2></div></div>
         <div class="shelf">${related.map(card).join("")}</div></section>` : ""}
     </article>`;
+
+    const sb = document.getElementById("saveBtn");
+    sb.addEventListener("click", () => {
+      const on = toggleShelf(b.id);
+      sb.setAttribute("aria-pressed", on);
+      sb.querySelector("span").textContent = t(on ? "saved" : "save");
+      toast(t(on ? "toast.saved" : "toast.removed"));
+    });
+    document.getElementById("shareBtn").addEventListener("click", async () => {
+      const url = location.href;
+      try {
+        if (navigator.share) { await navigator.share({ title: b.title, text: `${b.title}${b.author ? " · " + b.author : ""}`, url }); return; }
+        await navigator.clipboard.writeText(url);
+        toast(t("copied"));
+      } catch (e) { if (e && e.name !== "AbortError") toast(url); }
+    });
 
     const rb = document.getElementById("readBtn");
     rb && rb.addEventListener("click", () => {
@@ -501,24 +637,61 @@
     main.innerHTML = `<div class="prose">${t("about").replace("{n}", pd)}</div>`;
   }
 
+  function viewShelf() {
+    const saved = [...SHELF].map((id) => BY_ID.get(id)).filter(Boolean).reverse();
+    const recent = RECENT.map((id) => BY_ID.get(id)).filter(Boolean);
+    main.innerHTML = `<div class="page">
+      <div class="results-head"><h1>${esc(t("shelf.title"))}</h1><span class="count">${esc(countLabel(saved.length))}</span></div>
+      ${saved.length ? `<div class="book-grid">${saved.map(card).join("")}</div>` : `<div class="empty">${esc(t("shelf.empty"))}</div>`}
+      ${recent.length ? `<section class="section"><div class="section-head"><div><h2>${esc(t("recent.title"))}</h2></div>
+        <button class="btn ghost" type="button" id="clearRecent">${esc(t("recent.clear"))}</button></div>
+        <div class="shelf">${recent.map(card).join("")}</div></section>` : ""}
+    </div>`;
+    const cr = document.getElementById("clearRecent");
+    cr && cr.addEventListener("click", () => { RECENT = []; store.set("klibrary-recent", []); viewShelf(); });
+  }
+
   // ---------- render loop ----------
-  function render() {
+  const MEMO = new Map();
+  let navByLink = false;
+
+  function render(memo) {
     const { path, params } = parseHash();
     document.title = "KLibrary";
     document.querySelectorAll(".nav a").forEach((a) => a.classList.toggle("active", a.getAttribute("href") === "#" + path));
     if (document.activeElement !== qInput) qInput.value = path === "/browse" ? params.get("q") || "" : "";
     if (path.startsWith("/book/")) viewBook(decodeURIComponent(path.slice(6)));
-    else if (path === "/browse") viewBrowse(params);
-    else if (path === "/about") viewAbout();
+    else if (path === "/browse") {
+      if (memo && memo.shown) shown = memo.shown;
+      viewBrowse(params, !!(memo && memo.shown));
+      const h = main.querySelector("h1");
+      if (h) document.title = `${h.textContent} · KLibrary`;
+    }
+    else if (path === "/about") { viewAbout(); document.title = `${t("nav.about")} · KLibrary`; }
+    else if (path === "/shelf") { viewShelf(); document.title = `${t("shelf.title")} · KLibrary`; }
     else viewHome();
   }
 
   // ---------- events ----------
-  window.addEventListener("hashchange", () => { render(); scrollTo(0, 0); });
+  // Links mark the navigation as "forward" (scroll to top); back/forward restores position and loaded items.
+  document.addEventListener("click", (e) => { if (e.target.closest('a[href^="#"]')) navByLink = true; }, true);
+  let scrollTimer;
+  window.addEventListener("scroll", () => {
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(() => MEMO.set(location.hash, { y: scrollY, shown }), 120);
+  }, { passive: true });
+  window.addEventListener("hashchange", () => {
+    const memo = navByLink ? null : MEMO.get(location.hash);
+    navByLink = false;
+    render(memo);
+    if (memo) requestAnimationFrame(() => scrollTo(0, memo.y)); else scrollTo(0, 0);
+    if (document.activeElement !== qInput) main.focus({ preventScroll: true });
+  });
 
   main.addEventListener("click", (e) => {
     if (e.target.closest("[data-random]")) {
       const b = BOOKS[Math.floor(Math.random() * BOOKS.length)];
+      navByLink = true;
       location.hash = "#/book/" + b.id;
       return;
     }
@@ -579,6 +752,7 @@
       });
       BY_ID = new Map(BOOKS.map((b) => [b.id, b]));
       updateModeNote();
+      updateShelfCount();
       render();
     })
     .catch(() => { main.innerHTML = `<div class="empty">${esc(t("error.catalog"))}</div>`; });

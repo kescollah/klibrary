@@ -6,6 +6,14 @@
   <title>KLibrary</title>
   <meta name="description" content="Rare French esoteric, magical and mystical books in the public domain, readable online. In English, French and Haitian Creole.">
   <meta name="theme-color" content="#0f0d15">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="KLibrary">
+  <meta property="og:title" content="KLibrary · Rare books of magic, mysticism & the hidden sciences">
+  <meta property="og:description" content="Rare French esoteric, magical and mystical books in the public domain, readable online. In English, French and Haitian Creole.">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="KLibrary">
+  <meta name="twitter:description" content="Rare books of magic, mysticism & the hidden sciences, readable online.">
+  <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -31,6 +39,10 @@
     <nav class="nav">
       <a href="#/browse" data-i18n="nav.browse">Browse</a>
       <a href="#/about" data-i18n="nav.about">About</a>
+      <a class="icon-btn shelf-btn" href="#/shelf" data-i18n-aria="nav.shelf" aria-label="My shelf">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg>
+        <span class="pill" id="shelfCount" hidden></span>
+      </a>
       <label class="lang">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
         <select id="langSel" data-i18n-aria="lang.label" aria-label="Language"></select>
@@ -44,6 +56,8 @@
   <main id="main" tabindex="-1">
     <div class="loading" data-i18n="loading">Opening the archive…</div>
   </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <footer class="footer">
     <p id="footSources">Public-domain scans courtesy of the <a href="https://archive.org" rel="noopener">Internet Archive</a>, the BnF, the Bibliothèque Sainte-Geneviève, BIU Santé and the Wellcome Collection.</p>
