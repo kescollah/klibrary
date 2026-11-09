@@ -1,0 +1,7 @@
+# Full catalog with personal file names: local use only, never commit.
+data/catalog.private.json
+__pycache__/
+*.pyc
+.vercel/
+.DS_Store
+Thumbs.db

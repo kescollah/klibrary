@@ -1,0 +1,5 @@
+# Never deploy the private catalog or local tooling.
+data/catalog.private.json
+tools/
+serve_local.py
+__pycache__/
