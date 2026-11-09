@@ -8,3 +8,9 @@ Thumbs.db
 
 # Local list of confidential collections (names must never be committed).
 tools/confidential.local.txt
+
+# indexer build output and local index
+tools/indexer/build/
+tools/indexer/dist/
+*.spec
+_index_ia/
